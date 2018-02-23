@@ -1,0 +1,10 @@
+bin
+obj
+packages
+*.suo
+*.pyc
+*~
+.vscode
+paket.dependencies
+paket.dependencies.locked
+.vs

@@ -1,0 +1,6 @@
+﻿
+
+
+
+
+Remove-ADComputer -Identify $server

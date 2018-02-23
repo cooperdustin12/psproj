@@ -1,0 +1,90 @@
+# COMPONENTS
+# This PowerShell monitor allows us to monitor up to 10 specified Office365 components. To
+# monitor new components you must add them to the hashtable below. If you need to monitor
+# more than 10 components, you must do so with multiple PowerShell monitors in SolarWinds.
+
+# To specify a service, you must specify a 'Key' = 'Value' pair. The Key should not have any
+# spaces or special characters. The Value is the name of the Service as returned by 
+# Get-Office365ServiceHealth.
+
+# To get the service name of all active alerts:
+#    (Get-Office365ServiceHealth).Service | Select-Object -Unique
+
+# To get the service name of any alerts active in the last 30 days:
+#    (Get-Office365Events -Type ServiceIncident).AffectedServiceHealthStatus.ServiceName | Select-Object -Unique
+
+
+$components = @{
+    'ExchangeOnline' = 'Exchange Online'
+    'SharePointOnline' = 'SharePoint Online'
+    'SkypeForBusiness' = 'Skype for Business'
+    'OneDriveForBusiness' = 'OneDrive for Business'
+    'OfficeSubscription' = 'Office Subscription'
+    'MicrosoftTeams' = 'Microsoft Teams'
+}
+
+# HELPER FUNCTION
+# The function below is reusable code used to output the same status to all monitored components
+# such as when the script runs into an error, or there are no active alerts.
+function ExitWithMsg ($Message, $Availability=100, $ExitCode=0)
+{
+    foreach ($component in $components.Keys)
+    {
+        Write-Host "Statistic.${component}: $Availability"
+        Write-Host "Message.${component}: $Message"
+    }
+    exit $ExitCode
+}
+
+# GET USERNAME AND PASSWORD
+# Get the specified script arguments from SolarWinds.
+$Username = $args[0]
+$Password = $args[1]
+
+# VALIDATE USERNAME AND PASSWORD
+if (-not ($Username -and $Password))
+{
+    ExitWithMsg "Username or password script argument not specified." -ExitCode 5
+}
+
+# GET ACTIVE ALERTS
+try
+{
+    # Create a credential object from the specified username and password
+    $credential = New-Object -TypeName pscredential -ArgumentList $Username, ($Password | ConvertTo-SecureString -AsPlainText -Force) -ErrorAction Stop
+
+    # Get alerts with the credential object
+    $alerts = Get-Office365ServiceHealth -Credential $credential -ErrorAction Stop
+}
+catch
+{
+    ExitWithMsg "Error getting service health. $($Error[0].Exception.Message)" -ExitCode 5
+}
+
+# PARSE ACTIVE ALERTS
+if ($alerts)
+{
+    # Group all the alerts by service
+    $groupedAlerts = $alerts | Group-Object Service
+
+    # Write service operation messages for components without alerts
+    $components.GetEnumerator() | Where-Object {$_.Value -notin $groupedAlerts.Name} | ForEach-Object {
+        Write-Host "Statistic.$($_.Name): 100"
+        Write-Host "Message.$($_.Name): Service operational."
+    }
+
+    # Write service health messages for components in alert
+    foreach ($group in $groupedAlerts) {
+        $name = ($components.GetEnumerator() | Where-Object {$_.Value -eq $group.Name}).Name
+        $message = ($group.Group | ForEach-Object {"[$($_.Status)] $($_.Title). $($_.UserImpact)"}) -join "; "
+        Write-Host "Statistic.${name}: 50"
+        Write-Host "Message.${name}: $message"
+    }
+
+    # Exit with a warning state
+    exit 2
+}
+else
+{
+    ExitWithMsg "Service operational." 
+}

@@ -1,0 +1,13 @@
+bin
+obj
+packages
+*.suo
+*.pyc
+*~
+.vscode
+paket.dependencies
+paket.dependencies.locked
+.vs
+UpgradeLog.htm
+
+Samples/Java/swis-client/\.settings/
